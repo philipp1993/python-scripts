@@ -5,7 +5,11 @@
 #                   login, logout, and calling an API endpoint.
 import json         # JSON Parser
 import requests     # HTTP Calls
+from requests.adapters import HTTPAdapter
 import time
+
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 
 class AOSSSwitch:
@@ -35,32 +39,36 @@ class AOSSSwitch:
         """
         self.base_url = protocol+"://"+switchadress+"/rest/"+version
         api_url = self.base_url+"/login-sessions"
-
         credentials = {'userName': username, 'password': password}
-        #print(json.dumps(credentials))
+        # print(json.dumps(credentials))
         self.session = requests.Session()
-        response = self.session.post(api_url, json=credentials)
+        adapter = HTTPAdapter(pool_connections=1,
+                              pool_maxsize=0, max_retries=2, pool_block=False)
+        self.session.mount(api_url, adapter)
+        time.sleep(0.25)
+        response = self.session.post(api_url, json=credentials, timeout=5)
         if response.status_code == 201:
             #print("Login to switch: {} was successful".format(switchadress))
-            time.sleep(0.5)
+            time.sleep(0.25)
             return
         else:
-            raise ConnectionError("Login to switch failed! HTTP Code: "+
-                  response.status_code + " " + response.content)
+            raise ConnectionError("Login to switch failed! HTTP Code: " +
+                                  str(response.status_code) + " " + response.content)
 
     def logout(self) -> None:
         """Destroys the active session on the switch. This is important since the number of active sessions is limited 
         """
         api_url = self.base_url+"/login-sessions"
-        time.sleep(0.5)
-        response = self.session.delete(api_url)
+        time.sleep(0.25)
+        response = self.session.delete(api_url, timeout=5)
         if response.status_code == 204:
-            del self.session
+            self.session.close()
             return
             #print("Logged out!")
         else:
-            raise ConnectionError("Logout was not successful "+
-                  response.status_code + " " + response.content)
+            self.session.close()
+            raise ConnectionError("Logout was not successful " +
+                                  response.status_code + " " + response.content)
 
     def api_action(self, url: str, method: str, payload: str) -> requests.Response:
         """ Gets the PoE enabled status of a given port
@@ -86,10 +94,10 @@ class AOSSSwitch:
         time.sleep(0.5)
         api_url = self.base_url+url
         if method == "GET":
-            return self.session.get(api_url, json=payload)
+            return self.session.get(api_url, json=payload, timeout=5)
         if method == "PUT":
-            return self.session.put(api_url, json=payload)
+            return self.session.put(api_url, json=payload, timeout=5)
         if method == "POST":
-            return self.session.post(api_url, json=payload)
+            return self.session.post(api_url, json=payload, timeout=5)
         if method == "DELETE":
-            return self.session.delete(api_url, json=payload)
+            return self.session.delete(api_url, json=payload, timeout=5)
